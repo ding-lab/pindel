@@ -1537,18 +1537,27 @@ ostream& operator<<(ostream& os, const SVData& svd)
    os << svd.d_id << "\t";
    os << svd.getOutputFormattedReference() << "\t";
    os << svd.getOutputFormattedAlternative() << "\t";
+   //double double_quality =-1;;
    os << svd.d_quality << "\t";
    if (svd.d_format.size() == 2 && g_par.somatic) {
-
       somatic_p_value = fisher_test(svd.d_format[0].getTotalReads(), svd.d_format[0].getTotalRefSupport(), svd.d_format[1].getTotalReads(), svd.d_format[1].getTotalRefSupport());
+     /*
+	  if(somatic_p_value != 0.0){
+      	double_quality= -10 * log10(somatic_p_value);
+	  }
+	  */
       //if (somatic_p_value < 0.05) svd.d_filter = "PASS";
    }
+   /*if(double_quality == -1){
+   	    os << svd.d_quality << "\t";
+   	}else{
+	    os << double_quality << "\t";}
+   */
    if (somatic_p_value < 0.05) {
       os << "PASS\t";
    } else {
       os << svd.d_filter << "\t";
    }
-
 
    os << "END=" << svd.getVCFPrintEnd() << ";";
    os << "HOMLEN=" << svd.d_homlen << ";";
@@ -1879,6 +1888,17 @@ void convertIndelToSVdata( InputReader& pindelInput, map< string, int>& sampleMa
    int leftmostEndPos = atoi( fetchElement( lineStream, 1 ).c_str()); // now at position 11
    int leftmostStartPos = atoi (fetchElement( lineStream, 2 ).c_str());  // at position 13
    int rightmostEndPos = atoi (fetchElement( lineStream, 1 ).c_str()); // now at position 14
+
+   /*add quality by Niu, 20180814*/
+   stringstream::pos_type curpos=lineStream.tellg(); // keep the current position
+   svd.setQuality(atoi (fetchElement( lineStream, 11 ).c_str())); // now at position 25
+   lineStream.seekg(curpos); //back to the prior position
+   /*add quality by Niu,20180814 */
+
+   /**/
+   
+   /**/
+   
    svd.setBPrange( leftmostStartPos, rightmostEndPos );
    svd.setEnd( leftmostEndPos );
    svd.setHomlen( rightmostEndPos - leftmostEndPos );
@@ -1909,7 +1929,7 @@ void convertIndelToSVdata( InputReader& pindelInput, map< string, int>& sampleMa
          svd.setReplace( numNTadded, numNTinvAdded );
       }
    }
-   string sampleName = fetchElement( lineStream, 18);
+   string sampleName = fetchElement( lineStream, 18); 
    int refSupportAtStartOfEvent = 0;
    int refSupportAtEndOfEvent = 0;
 
