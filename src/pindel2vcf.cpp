@@ -1133,7 +1133,7 @@ public:
       }
    }
 
-private:
+//private:
 
    bool altSameLengthAsRef() const
    {
@@ -1512,53 +1512,124 @@ int FACT(int n)
    for (i=1; i<=n; i++) {
       fact*=i;
    }
-   std::cout << n << " " << fact << std::endl;
    return fact;
-}
+ }
 
 double fisher_test(int a, int c, int b, int d)
 {
    double p = 0.0;
    int n = a + b + c + d;
+
    p = (FACT(a+b)*FACT(c+d)*FACT(a+c)*FACT(d+b)) / (double)(FACT(a)*FACT(b)*FACT(c)*FACT(d)*FACT(n));
-   std::cout << a << " " << c << " " << b << " " << d << " " << p << std::endl;
    return p;
 }
 
+/*BEGIN added by NIU 20180816 */
+double chisqr_test(int a, int c, int b, int d)
+{
+   double x2=0.0;
+   double theoretical_a=double(a+b)*double(a+c)/double(a+b+c+d);
+   double theoretical_b=double(a+b)*double(b+d)/double(a+b+c+d);
+   double theoretical_c=double(a+c)*double(c+d)/double(a+b+c+d);
+   double theoretical_d=double(c+d)*double(b+d)/double(a+b+c+d);
+   x2 = pow((a-theoretical_a),2.0)/theoretical_a + pow((b-theoretical_b),2.0)/theoretical_b + pow((c-theoretical_c),2.0)/theoretical_c + pow((d-theoretical_d),2.0)/theoretical_d;
+   std::cout << "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddx2" << x2 << endl;
+   return x2;
+   // or you can use the following method
+   // return (a+b+c+d)*pow(double(a*d-b*c),2.0)/((a+b)*(c+d)*(a+c)*(b+d)) 
+}
+
+double KM(double s, double z) {
+   double sum = 1.0;
+   double nom = 1.0;
+   double denom = 1.0;
+   double log_nom =log(nom);
+   double log_denom = log(denom);
+   double log_s = log(s);
+   double log_z = log(z);
+   for (int i = 0; i < 1000; ++i) {
+      log_nom += log_z;
+      s++;
+      log_s = log(s);
+      log_denom += log_s;
+      double log_sum = log_nom - log_denom;
+      sum += exp(log_sum);
+   }
+   return sum;
+}
+
+double getApproxGamma(double n) {
+   std::cout << "getApproxGamma jinlaila!!!!!!!!!!!!!!!!!!!!!!";
+   double RECIP_E = 0.36787944117144232159552377016147;
+   double TWOPI = 6.283185307179586476925286766559;
+   double d = 1.0 / (10.0 * n);
+   d = 1.0 / ((12* n) - d);
+   d = (d + n) *RECIP_E;
+   d = pow(d,n);
+   d *= sqrt(TWOPI / n);
+   return d;
+}
+
+double log_igf(double s, double z){
+   if (z < 0.0) {
+      return 0.0;
+   }
+   double sc = (log(z) * s) - z - log(s);
+   double k = KM(s, z);
+   return log(k) + sc;
+}
+
+
+double chisqr2pValue(int dof, double chi_squared) {
+   if( chi_squared < 0 || dof < 1){
+      return 0.0;
+   }
+   double k = ((double) dof) * 0.5;
+   double v = chi_squared * 0.5;
+
+   if(dof ==2){
+      std::cout << "in dof ==2" <<endl;
+      return exp(-1.0 * v);
+   }
+   double incompleteGamma = log_igf(k,v);
+   if (exp(incompleteGamma) <= 1e-8 || isnan(exp(incompleteGamma)) || isinf(exp(incompleteGamma))){
+      return 1e-14;
+   }
+   double gamma = log(getApproxGamma(k));
+   incompleteGamma -= gamma;
+   if(exp(incompleteGamma) > 1){
+      return 1e-14;
+   }
+   double pValue = 1.0 - exp(incompleteGamma);
+   return (double)pValue;
+}
+/*END added by NIU 20180816 */
 
 ostream& operator<<(ostream& os, const SVData& svd)
 {
    double somatic_p_value = 0.0;
-
-
-
    os << svd.d_chromosome << "\t";
    os << svd.getPosition() << "\t";
    os << svd.d_id << "\t";
    os << svd.getOutputFormattedReference() << "\t";
    os << svd.getOutputFormattedAlternative() << "\t";
-   //double double_quality =-1;;
-   os << svd.d_quality << "\t";
-   if (svd.d_format.size() == 2 && g_par.somatic) {
-      somatic_p_value = fisher_test(svd.d_format[0].getTotalReads(), svd.d_format[0].getTotalRefSupport(), svd.d_format[1].getTotalReads(), svd.d_format[1].getTotalRefSupport());
-     /*
-	  if(somatic_p_value != 0.0){
-      	double_quality= -10 * log10(somatic_p_value);
-	  }
-	  */
+   double double_quality=0.0;
+   //if (svd.d_format.size() == 2 && g_par.somatic) {
+   if (svd.d_format.size() == 2) {
+      somatic_p_value = chisqr2pValue(1,chisqr_test(svd.d_format[0].getTotalRefSupport(),svd.d_format[1].getTotalRefSupport(),svd.d_format[0].getTotalReads(),svd.d_format[1].getTotalReads()));
+      if(somatic_p_value != 0.0){
+      	double_quality= round(-10 * log10(somatic_p_value));
+      }
       //if (somatic_p_value < 0.05) svd.d_filter = "PASS";
    }
-   /*if(double_quality == -1){
-   	    os << svd.d_quality << "\t";
-   	}else{
-	    os << double_quality << "\t";}
-   */
+   // added by NIU 20180816
+   os << double_quality << "\t";
+   // added comment by NIU 20180816 
    if (somatic_p_value < 0.05) {
       os << "PASS\t";
    } else {
       os << svd.d_filter << "\t";
    }
-
    os << "END=" << svd.getVCFPrintEnd() << ";";
    os << "HOMLEN=" << svd.d_homlen << ";";
    if ( svd.d_homlen != 0 ) {
@@ -1581,9 +1652,10 @@ ostream& operator<<(ostream& os, const SVData& svd)
    }
 
    if (svd.d_format.size() == 2 && g_par.somatic) {
-      os << ";" << somatic_p_value;
+     // os << ";" << somatic_p_value;
+     // added by NIU 20180816
+     os << ";" << double_quality;
    }
-
 
    if (pindel024uOrLater && svd.getAlternative()!="<INS>") {
       os << "\tGT:AD";
@@ -1810,6 +1882,10 @@ void convertIndelToSVdata( InputReader& pindelInput, map< string, int>& sampleMa
       int numberItemsUntilNextSupport = ( pindel024uOrLater ? 2 : 2 );
       int samplePlusSupport = atoi( fetchElement( lineStream, numberItemsUntilNextSupport ).c_str());
       int sampleMinSupport = atoi( fetchElement( lineStream, numberItemsUntilNextSupport ).c_str()); // now at position 35, total +supports sample 1
+      std::cout << "hahahaaaaaaaaaaaa: totalRefSupport: " << totalRefSupport <<std::endl;
+      std::cout << "hahahaaaaaaaaaaaa: samplePlusSupport: " << samplePlusSupport <<std::endl;
+      std::cout << "hahahaaaaaaaaaaaa: sampleMinSupport: " << sampleMinSupport << std::endl;
+
       //int count=0;
       while (!lineStream.fail()) {
          if (sampleMap.find( sampleName )==sampleMap.end() ) {
@@ -1890,9 +1966,9 @@ void convertIndelToSVdata( InputReader& pindelInput, map< string, int>& sampleMa
    int rightmostEndPos = atoi (fetchElement( lineStream, 1 ).c_str()); // now at position 14
 
    /*add quality by Niu, 20180814*/
-   stringstream::pos_type curpos=lineStream.tellg(); // keep the current position
-   svd.setQuality(atoi (fetchElement( lineStream, 11 ).c_str())); // now at position 25
-   lineStream.seekg(curpos); //back to the prior position
+   //stringstream::pos_type curpos=lineStream.tellg(); // keep the current position
+   //svd.setQuality(atoi (fetchElement( lineStream, 11 ).c_str())); // now at position 25
+   //lineStream.seekg(curpos); //back to the prior position
    /*add quality by Niu,20180814 */
 
    /**/
@@ -1943,6 +2019,12 @@ void convertIndelToSVdata( InputReader& pindelInput, map< string, int>& sampleMa
    int numberOfItemsUntilNextSupport = ( pindel024uOrLater ? 2 : 2 );
    int plusSupport = atoi( fetchElement( lineStream, numberOfItemsUntilNextSupport - 1 ).c_str()); // now at position 33, total +supports sample 1; for unique support 1->2
    int minSupport = atoi( fetchElement( lineStream, numberOfItemsUntilNextSupport ).c_str()); // now at position 35, total +supports sample 1
+   std::cout << "hahahaaaaaaaaaaaa: pindel024uOrLater: " << pindel024uOrLater <<std::endl;
+   std::cout << "hahahaaaaaaaaaaaa: totalRefSupport: " << totalRefSupport <<std::endl;
+   std::cout << "hahahaaaaaaaaaaaa: plusSupport: " << plusSupport <<std::endl;
+   std::cout << "hahahaaaaaaaaaaaa: minSupport: " << minSupport << std::endl;
+
+
    int count=0;
    while (!lineStream.fail()) {
       if (sampleMap.find( sampleName )==sampleMap.end() ) {
@@ -1963,6 +2045,10 @@ void convertIndelToSVdata( InputReader& pindelInput, map< string, int>& sampleMa
       plusSupport = atoi( fetchElement( lineStream, numberOfItemsUntilNextSupport - 1 ).c_str()); // for unique support, 2->1
       minSupport = atoi( fetchElement( lineStream, numberOfItemsUntilNextSupport ).c_str()); // now at position 33, total +supports sample 1
    }
+         std::cout <<"#################################: svd.d_format[0].getTotalReads() "<<svd.d_format[0].getTotalReads() << std::endl;
+      std::cout <<"#################################:: svd.d_format[0].getTotalRefSupport()"<<svd.d_format[0].getTotalRefSupport() << std::endl;
+      std::cout <<"#################################:: svd.d_format[1].getTotalReads()"<<svd.d_format[1].getTotalReads() << std::endl;
+      std::cout <<"#################################:: svd.d_format[1].getTotalRefSupport()"<<svd.d_format[1].getTotalRefSupport() << std::endl;   
 }
 
 /* 'readReference' reads in the reference. */
