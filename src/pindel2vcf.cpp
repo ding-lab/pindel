@@ -1587,6 +1587,7 @@ ostream &operator<<(ostream &os, const SVData &svd) {
     os << svd.d_id << "\t";
     os << svd.getOutputFormattedReference() << "\t";
     os << svd.getOutputFormattedAlternative() << "\t";
+    os << svd.d_quality << "\t";
     double double_quality = 0.0;
 //    if (svd.d_format.size() == 2 && g_par.somatic) {
 //
